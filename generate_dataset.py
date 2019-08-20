@@ -13,8 +13,9 @@ import tifffile as tiff
 import fiona
 
 from params import *
+from tqdm import tqdm
 
-PATCH_SIZES = [1, 2, 3]
+PATCH_SIZES = [4]
 GLCM_PROPS 	= ['contrast', 'dissimilarity', 'homogeneity', 'ASM', 'energy', 'correlation']
 
 def exband_histgram(src_matrix):
@@ -43,99 +44,131 @@ def exband_histgram(src_matrix):
 
 	return src_matrix.astype(np.uint8)
 
-if __name__ == '__main__':
-	parser     	= argparse.ArgumentParser()
-	parser.add_argument('--shape_file', default="AGB_ground_truth.shp", help='Path to ground truth shapefile')
-	parser.add_argument('--image_dir', default=".", help='Path to images dir')
-	parser 		= parser.parse_args()
+def generate_patches(gts, labels, filepath, save_dir):
+	for label in labels:
+		if not os.path.exists(os.path.join(save_dir, str(label))):
+			os.makedirs(os.path.join(save_dir, str(label)))
 
-	shape 		= fiona.open(parser.shape_file)
-	ft_table 	= None
-	targets 	= []
-	headers 	= []
+	patch_size 	= PATCH_SIZES[0]
 
-	first_file 	= True
-	for filepath in glob.glob(os.path.join(parser.image_dir, "*.tif")):
-		basename 	= os.path.basename(filepath).split(".")[0]
-		print(basename)
+	image 		= geoio.GeoImage(filepath)
+	image_data 	= image.get_data()
 
-		image 		= geoio.GeoImage(filepath)
-		image_data 	= image.get_data()
-		image_data 	= image_data[0, ...]
+	for loc, label in tqdm(zip(gts, labels)):
+		loc_y, loc_x 	= loc
+		x, y 			= image.proj_to_raster(loc_x, loc_y)
+		x, y 			= int(x), int(y)
 
-		data_file	= None
-		first_point = True
-		for point in shape:
-			properties 	= point["properties"]
-			geometry 	= point["geometry"]
+		if x >= patch_size and y >= patch_size and x < image_data.shape[2] - patch_size and y < image_data.shape[1] - patch_size:
+			left_x 		= x - patch_size
+			right_x 	= x + patch_size + 1
 
-			agb 		= properties['AGB_Mean']
-			loc 		= geometry['coordinates']
+			bot_y 		= y - patch_size
+			top_y 		= y + patch_size + 1
 			
-			x, y 		= image.proj_to_raster(loc[0], loc[1])
-			x, y 		= int(x), int(y)
-			if x >= 0 and y >= 0 and x < image_data.shape[1] and y < image_data.shape[0]:
-				if first_file:
-					targets.append(agb)
+			patch 		= image_data[:, bot_y: top_y, left_x: right_x]
+			patch 		= np.swapaxes(patch, 0, 2)
 
-				data_point 	= []
-				# get value of this point
-				if first_point:
-					headers.append(basename)
+			tiff.imsave(os.path.join(save_dir, str(label), "%d_%d.tif" % (y, x)), patch, planarconfig='contig')
 
-				data_point.append(image_data[y, x])
-				# get feature around this point
-				for patch_size in PATCH_SIZES:
-					left_x 		= x - patch_size if x - patch_size >= 0 else 0
-					right_x 	= x + patch_size + 1 if x + patch_size + 1 < image_data.shape[1] else image_data.shape[1]
+def generate_features(gts, targets, filepath):
+	ft_table 	= []
+	targets 	= []
 
-					bot_y 		= y - patch_size if y - patch_size >= 0 else 0
-					top_y 		= y + patch_size + 1 if y + patch_size + 1 < image_data.shape[0] else image_data.shape[0]
+	patch_size 	= 1
+	image 		= geoio.GeoImage(filepath)
+	image_data 	= image.get_data()
+	for loc, label in tqdm(zip(gts, labels)):
+		x, y 		= image.proj_to_raster(loc[0], loc[1])
+		x, y 		= int(x), int(y)
 
-					patch 		= image_data[bot_y: top_y, left_x: right_x]
-					# calculate first-order stats
-					if first_point:
-						headers.append("%s_mean_%d" % (basename, patch_size))
-						headers.append("%s_std_%d" % (basename, patch_size))
-						headers.append("%s_skew_%d" % (basename, patch_size))
-						headers.append("%s_kurtosis_%d" % (basename, patch_size))
+		if x >= patch_size and y >= patch_size and x < image_data.shape[2] - patch_size and y < image_data.shape[1] - patch_size:
+			data_point 	= []
+
+			left_x 		= x - patch_size
+			right_x 	= x + patch_size + 1
+
+			bot_y 		= y - patch_size
+			top_y 		= y + patch_size + 1
+
+			patch 		= image_data[:, bot_y: top_y, left_x: right_x]
+			patch 		= np.swapaxes(patch, 0, 2)
 					
-					data_point.append(np.mean(patch))
-					data_point.append(np.std(patch))
-					data_point.append(skew(patch.reshape(-1)))
-					data_point.append(kurtosis(patch.reshape(-1)))
+			data_point.append(np.mean(patch))
+			data_point.append(np.std(patch))
+			data_point.append(skew(patch.reshape(-1)))
+			data_point.append(kurtosis(patch.reshape(-1)))
 					
-					# calculate second-order stats
-					glcm = greycomatrix(exband_histgram(patch), [1], [i * np.pi / 8 for i in range(8)])
-					for prop in GLCM_PROPS:
-						if first_point:
-							headers.append("%s_%s_%d" % (basename, prop, patch_size))
-						
-						data_point.append(greycoprops(glcm, prop)[0, 0])
-				data_point = np.array(data_point)
+			# calculate second-order stats
+			glcm = greycomatrix(exband_histgram(patch), [1], [i * np.pi / 8 for i in range(8)])
+			for prop in GLCM_PROPS:	
+				data_point.append(greycoprops(glcm, prop)[0, 0])
 
-				if data_file is None:
-					data_file = data_point
-				else:
-					data_file = np.vstack((data_file, data_point))
-
-				first_point = False
-		
-		if ft_table is None:
-			ft_table = data_file
-		else:
-			ft_table = np.hstack((ft_table, data_file))
-
-		first_file = False
+			ft_table.append(data_point)
+			targets.append(label)
 
 	targets 	= np.array(targets)
-	targets 	= np.expand_dims(targets, axis=0)
-	targets 	= np.transpose(targets)
-
+	ft_table 	= np.array(ft_table)
 	data_table 	= np.hstack((targets, ft_table))
-	headers 	= ["AGB_Mean"] + headers
+	headers 	= ["Target"] + ['b_%d' % i for i in range(ft_table.shape[1])]
 
 	df = pd.DataFrame(data=data_table, index=None, columns=headers)
-	df.to_csv(os.path.join(DATA_DIR, "data.csv"), index=False)
-				
+	return df
 
+def raster_to_gt_points(gt_path):
+	gt_img 		= geoio.GeoImage(gt_path)
+	
+	gt_data 	= gt_img.get_data()
+	gt_data 	= gt_data[0, ...]
+	
+	ys, xs 		= np.where(gt_data > 0)
+
+	gts 		= []
+	targets 	= []
+	for x, y in zip(xs, ys):
+		loc_x, loc_y = gt_img.raster_to_proj(x, y)
+
+		gts.append((loc_y, loc_x))
+		targets.append(gt_data[y, x])
+	return gts, targets
+
+def shp_to_gt_points(shape_file):
+	shape 	= fiona.open(shape_file)
+	gts 	= []
+	targets = []
+	for point in shape:
+		properties 	= point["properties"]
+		geometry 	= point["geometry"]
+
+		val 		= properties['AGB_Mean']
+		loc 		= geometry['coordinates']
+
+		gts.append(loc)
+		targets.append(val)
+
+	return gts, targets
+
+if __name__ == '__main__':
+	parser     	= argparse.ArgumentParser()
+	parser.add_argument('--ground_truth', default="AGB_ground_truth.shp", help='Path to ground truth shapefile')
+	parser.add_argument('--image_path', default=".", help='Path to images dir')
+	parser.add_argument('--save_dir', default=".", help='Path to images dir')
+	
+	parser 		= parser.parse_args()
+
+	ext 	= os.path.basename(parser.ground_truth).split(".")[-1]
+	func 	= None
+	if ext in ["shp", "SHP"]:
+		func = shp_to_gt_points
+	elif ext in ["tif", "TIF", "tiff", "TIFF"]:
+		func = raster_to_gt_points
+	else:
+		RaiseValueError("Ground truth file is not supported!")
+
+	gts, targets 	= func(parser.ground_truth)
+	print(len(gts), len(targets))
+
+	generate_patches(gts, targets, parser.image_path, parser.save_dir)
+
+	# df 				= generate_data(gts, targets)
+	# df.to_csv(os.path.join(parser.save_dir, "data.csv"), index=False)

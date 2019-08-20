@@ -1,16 +1,36 @@
-import os
-
 import numpy as np
-import pandas as pd
+import os
+import argparse
+import glob
+from shutil import copyfile
 
-from params import *
+from sklearn.model_selection import train_test_split
 
-# reading data
-df = pd.read_csv(os.path.join(DATA_DIR, 'data.csv'))
+def ensure_dir(path):
+	if not os.path.isdir(path):
+		os.mkdir(path)
 
-msk = np.random.rand(len(df)) < 0.7
-train_df = df[msk]
-test_df = df[~msk]
+if __name__ == '__main__':
+	parser     	= argparse.ArgumentParser()
+	parser.add_argument('--image_dir', default=".", help='Path to images dir')
+	parser.add_argument('--save_dir', default=".", help='Path to images dir')
+	parser.add_argument('--rng', type=int, default=28)
+	parser 		= parser.parse_args()
 
-train_df.to_csv(os.path.join(DATA_DIR, "train.csv"), index=False)
-test_df.to_csv(os.path.join(DATA_DIR, "test.csv"), index=False)
+	ensure_dir(os.path.join(parser.save_dir, "train_%d" % parser.rng))
+	ensure_dir(os.path.join(parser.save_dir, "test_%d" % parser.rng))
+
+	for label in os.listdir(parser.image_dir):
+		ensure_dir(os.path.join(parser.save_dir, "train_%d" % parser.rng, label))
+		ensure_dir(os.path.join(parser.save_dir, "test_%d" % parser.rng,  label))
+
+		filepaths 		= glob.glob(os.path.join(parser.image_dir, label, "*.tif"))
+		X_train, X_test = train_test_split(filepaths, test_size=0.33, random_state=parser.rng)
+
+		for filepath in X_train:
+			target_path = os.path.join(parser.save_dir, "train_%d" % parser.rng, label, os.path.basename(filepath))
+			copyfile(filepath, target_path)
+		
+		for filepath in X_test:
+			target_path = os.path.join(parser.save_dir, "test_%d" % parser.rng, label, os.path.basename(filepath))
+			copyfile(filepath, target_path)
