@@ -44,7 +44,7 @@ def exband_histgram(src_matrix):
 
 	return src_matrix.astype(np.uint8)
 
-def generate_patches(gts, labels, filepath, save_dir):
+def generate_patches(gts, labels, train_test, filepath, save_dir):
 	for label in labels:
 		if not os.path.exists(os.path.join(save_dir, str(label))):
 			os.makedirs(os.path.join(save_dir, str(label)))
@@ -54,7 +54,7 @@ def generate_patches(gts, labels, filepath, save_dir):
 	image 		= geoio.GeoImage(filepath)
 	image_data 	= image.get_data()
 
-	for loc, label in tqdm(zip(gts, labels)):
+	for loc, label, istrain in tqdm(zip(gts, labels, train_test)):
 		loc_y, loc_x 	= loc
 		x, y 			= image.proj_to_raster(loc_x, loc_y)
 		x, y 			= int(x), int(y)
@@ -69,7 +69,10 @@ def generate_patches(gts, labels, filepath, save_dir):
 			patch 		= image_data[:, bot_y: top_y, left_x: right_x]
 			patch 		= np.swapaxes(patch, 0, 2)
 
-			tiff.imsave(os.path.join(save_dir, str(label), "%d_%d.tif" % (y, x)), patch, planarconfig='contig')
+			if istrain:
+				tiff.imsave(os.path.join(save_dir, "train", str(label), "%d_%d.tif" % (y, x)), patch, planarconfig='contig')
+			else:
+				tiff.imsave(os.path.join(save_dir, "test", str(label), "%d_%d.tif" % (y, x)), patch, planarconfig='contig')
 
 def generate_features(gts, targets, filepath):
 	ft_table 	= []
@@ -115,22 +118,28 @@ def generate_features(gts, targets, filepath):
 	df = pd.DataFrame(data=data_table, index=None, columns=headers)
 	return df
 
-def raster_to_gt_points(gt_path):
+def raster_to_gt_points(gt_path, train_mask_path):
 	gt_img 		= geoio.GeoImage(gt_path)
-	
 	gt_data 	= gt_img.get_data()
 	gt_data 	= gt_data[0, ...]
+
+	train_mask 	= tiff.imread(train_mask_path)
+
+	print(gt_data.shape, train_mask.shape)
 	
 	ys, xs 		= np.where(gt_data > 0)
 
 	gts 		= []
 	targets 	= []
+	train_test 	= []
 	for x, y in zip(xs, ys):
 		loc_x, loc_y = gt_img.raster_to_proj(x, y)
 
 		gts.append((loc_y, loc_x))
 		targets.append(int(gt_data[y, x]))
-	return gts, targets
+		train_test.append(train_mask[y, x] > 0)
+	
+	return gts, targets, train_test
 
 def shp_to_gt_points(shape_file):
 	shape 	= fiona.open(shape_file)
@@ -150,9 +159,11 @@ def shp_to_gt_points(shape_file):
 
 if __name__ == '__main__':
 	parser     	= argparse.ArgumentParser()
-	parser.add_argument('--ground_truth', default="AGB_ground_truth.shp", help='Path to ground truth shapefile')
-	parser.add_argument('--image_path', default=".", help='Path to images dir')
-	parser.add_argument('--save_dir', default=".", help='Path to images dir')
+	parser.add_argument('--ground_truth', 	default="data.tif", 	help='Path to ground truth file')
+	parser.add_argument('--train_mask', 	default="train.tif", 	help='Path to train mask file')
+	parser.add_argument('--test_mask', 		default="test.tif",		help='Path to test mask file')
+	parser.add_argument('--image_path', 	default=".", 			help='Path to images dir')
+	parser.add_argument('--save_dir', 		default=".", 			help='Path to images dir')
 	
 	parser 		= parser.parse_args()
 	
@@ -169,7 +180,7 @@ if __name__ == '__main__':
 	else:
 		RaiseValueError("Ground truth file is not supported!")
 
-	gts, targets 	= func(parser.ground_truth)
-	print(len(gts), len(targets))
+	gts, targets, train_test 	= func(parser.ground_truth, parser.train_mask)
+	print(len(gts), len(targets), len(train_test))
 
-	generate_patches(gts, targets, parser.image_path, parser.save_dir)
+	generate_patches(gts, targets, train_test, parser.image_path, parser.save_dir)
