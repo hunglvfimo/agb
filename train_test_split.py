@@ -3,6 +3,7 @@ import os
 import argparse
 import glob
 
+import cv2
 import tifffile as tiff
 from sklearn.model_selection import train_test_split
 import csv
