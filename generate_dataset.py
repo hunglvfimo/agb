@@ -129,7 +129,7 @@ def raster_to_gt_points(gt_path):
 		loc_x, loc_y = gt_img.raster_to_proj(x, y)
 
 		gts.append((loc_y, loc_x))
-		targets.append(gt_data[y, x])
+		targets.append(int(gt_data[y, x]))
 	return gts, targets
 
 def shp_to_gt_points(shape_file):
@@ -155,6 +155,10 @@ if __name__ == '__main__':
 	parser.add_argument('--save_dir', default=".", help='Path to images dir')
 	
 	parser 		= parser.parse_args()
+	
+	ensure_dir(parser.save_dir)
+	ensure_dir(os.path.join(parser.save_dir, "train"))
+	ensure_dir(os.path.join(parser.save_dir, "test"))
 
 	ext 	= os.path.basename(parser.ground_truth).split(".")[-1]
 	func 	= None
@@ -169,6 +173,3 @@ if __name__ == '__main__':
 	print(len(gts), len(targets))
 
 	generate_patches(gts, targets, parser.image_path, parser.save_dir)
-
-	# df 				= generate_data(gts, targets)
-	# df.to_csv(os.path.join(parser.save_dir, "data.csv"), index=False)
