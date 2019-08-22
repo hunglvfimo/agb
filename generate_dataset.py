@@ -18,6 +18,10 @@ from tqdm import tqdm
 PATCH_SIZES = [4]
 GLCM_PROPS 	= ['contrast', 'dissimilarity', 'homogeneity', 'ASM', 'energy', 'correlation']
 
+def ensure_dir(path):
+	if not os.path.isdir(path):
+		os.mkdir(path)
+
 def exband_histgram(src_matrix):
 	# replace inf and nan with 0
 	src_matrix = np.vectorize(lambda x: x if (np.isfinite(x) and not np.isnan(x)) else 0)(src_matrix)
