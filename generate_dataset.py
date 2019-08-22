@@ -50,8 +50,8 @@ def exband_histgram(src_matrix):
 
 def generate_patches(gts, labels, train_test, filepath, save_dir):
 	for label in labels:
-		if not os.path.exists(os.path.join(save_dir, str(label))):
-			os.makedirs(os.path.join(save_dir, str(label)))
+		ensure_dir(os.path.join(save_dir, "train", str(label)))
+		ensure_dir(os.path.join(save_dir, "test", str(label)))
 
 	patch_size 	= PATCH_SIZES[0]
 
