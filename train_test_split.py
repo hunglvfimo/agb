@@ -42,8 +42,8 @@ if __name__ == '__main__':
 	for k in cnt_dict.keys():
 		cnt_train, cnt_test = train_test_split(cnt_dict[k], test_size=0.3, random_state=parser.rng)
 
-		cv2.drawContours(train_image, 	cnt_train, 	-1, k, 1)
-		cv2.drawContours(test_image, 	cnt_test, 	-1, k, 1)
+		cv2.drawContours(train_image, 	cnt_train, 	-1, k, -1)
+		cv2.drawContours(test_image, 	cnt_test, 	-1, k, -1)
 
 	tiff.imsave(os.path.join(base_dir, "train.tif"), train_image, planarconfig='contig')
 	tiff.imsave(os.path.join(base_dir, "test.tif"), test_image,  planarconfig='contig')
