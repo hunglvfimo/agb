@@ -29,9 +29,7 @@ if __name__ == '__main__':
 	_, contours, _ = cv2.findContours(binary_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 	for cnt in contours:
 		# compute the center of the contour
-		M 	= cv2.moments(cnt)
-		cX 	= int(M["m10"] / M["m00"])
-		cY 	= int(M["m01"] / M["m00"])
+		cx, cy 	= cnt[0, 0]
 
 		# label of the contour
 		label 	= gt_image[cy, cx]
