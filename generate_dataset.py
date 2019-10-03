@@ -48,12 +48,10 @@ def exband_histgram(src_matrix):
 
 	return src_matrix.astype(np.uint8)
 
-def generate_patches(gts, labels, train_test, filepath, save_dir):
+def generate_patches(gts, labels, train_test, filepath, save_dir, patch_size=4):
 	for label in labels:
 		ensure_dir(os.path.join(save_dir, "train", str(label)))
 		ensure_dir(os.path.join(save_dir, "test", str(label)))
-
-	patch_size 	= PATCH_SIZES[0]
 
 	image 		= geoio.GeoImage(filepath)
 	image_data 	= image.get_data()
@@ -163,11 +161,13 @@ def shp_to_gt_points(shape_file):
 
 if __name__ == '__main__':
 	parser     	= argparse.ArgumentParser()
+	parser.add_argument('--patch-size',     default=4, 	type=int,	help='batch size')
 	parser.add_argument('--ground_truth', 	default="data.tif", 	help='Path to ground truth file')
 	parser.add_argument('--train_mask', 	default="train.tif", 	help='Path to train mask file')
 	parser.add_argument('--test_mask', 		default="test.tif",		help='Path to test mask file')
 	parser.add_argument('--image_path', 	default=".", 			help='Path to images dir')
 	parser.add_argument('--save_dir', 		default=".", 			help='Path to images dir')
+
 	
 	parser 		= parser.parse_args()
 	
@@ -187,4 +187,4 @@ if __name__ == '__main__':
 	gts, targets, train_test 	= func(parser.ground_truth, parser.train_mask)
 	print(len(gts), len(targets), len(train_test))
 
-	generate_patches(gts, targets, train_test, parser.image_path, parser.save_dir)
+	generate_patches(gts, targets, train_test, parser.image_path, parser.save_dir, patch_size=parser.patch_size)
