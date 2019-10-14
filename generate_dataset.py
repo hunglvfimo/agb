@@ -120,12 +120,13 @@ def generate_features(gts, targets, filepath):
 	df = pd.DataFrame(data=data_table, index=None, columns=headers)
 	return df
 
-def raster_to_gt_points(gt_path, train_mask_path):
+def raster_to_gt_points(gt_path, train_mask_path=None):
 	gt_img 		= geoio.GeoImage(gt_path)
 	gt_data 	= gt_img.get_data()
 	gt_data 	= gt_data[0, ...]
 
-	train_mask 	= tiff.imread(train_mask_path)
+	if train_mask_path is not None:
+		train_mask 	= tiff.imread(train_mask_path)
 
 	print(gt_data.shape, train_mask.shape)
 	
@@ -133,23 +134,35 @@ def raster_to_gt_points(gt_path, train_mask_path):
 
 	gts 		= []
 	targets 	= []
-	train_test 	= []
+	isTrain 	= []
 	for x, y in zip(xs, ys):
 		loc_x, loc_y = gt_img.raster_to_proj(x, y)
 
 		gts.append((loc_y, loc_x))
 		targets.append(int(gt_data[y, x]))
-		train_test.append(train_mask[y, x] > 0)
+		
+		if train_mask_path is not None:
+			isTrain.append(train_mask[y, x] > 0)
+		else:
+			# every points are training points
+			isTrain.append(True)
 	
-	return gts, targets, train_test
+	return gts, targets, isTrain
 
-def shp_to_gt_points(shape_file):
+def shp_to_gt_points(shape_file, train_mask_path=None):
 	shape 	= fiona.open(shape_file)
+
+	if train_mask_path is not None:
+		train_mask 	= tiff.imread(train_mask_path)
+
 	gts 	= []
 	targets = []
+	isTrain = []
 	for point in shape:
 		properties 	= point["properties"]
 		geometry 	= point["geometry"]
+
+		print(properties)
 
 		val 		= properties['AGB_Mean']
 		loc 		= geometry['coordinates']
@@ -157,16 +170,21 @@ def shp_to_gt_points(shape_file):
 		gts.append(loc)
 		targets.append(val)
 
-	return gts, targets
+		if train_mask_path is not None:
+			pass
+		else:
+			# every points are training points
+			isTrain.append(True)
+
+	return gts, targets, isTrain
 
 if __name__ == '__main__':
 	parser     	= argparse.ArgumentParser()
 	parser.add_argument('--patch-size',     default=4, 	type=int,	help='batch size')
-	parser.add_argument('--ground_truth', 	default="data.tif", 	help='Path to ground truth file')
-	parser.add_argument('--train_mask', 	default="train.tif", 	help='Path to train mask file')
-	parser.add_argument('--test_mask', 		default="test.tif",		help='Path to test mask file')
-	parser.add_argument('--image_path', 	default=".", 			help='Path to images dir')
-	parser.add_argument('--save_dir', 		default=".", 			help='Path to images dir')
+	parser.add_argument('--ground-truth', 	default="data.tif", 	help='Path to ground truth file')
+	parser.add_argument('--train-mask', 	default=None, 	help='Path to train mask file')
+	parser.add_argument('--image-path', 	default=".", 			help='Path to images dir')
+	parser.add_argument('--save-dir', 		default=".", 			help='Path to images dir')
 
 	
 	parser 		= parser.parse_args()
@@ -185,6 +203,6 @@ if __name__ == '__main__':
 		RaiseValueError("Ground truth file is not supported!")
 
 	gts, targets, train_test 	= func(parser.ground_truth, parser.train_mask)
-	print(len(gts), len(targets), len(train_test))
+	print(len(gts), len(targets))
 
 	generate_patches(gts, targets, train_test, parser.image_path, parser.save_dir, patch_size=parser.patch_size)
