@@ -162,8 +162,6 @@ def shp_to_gt_points(shape_file, train_mask_path=None):
 		properties 	= point["properties"]
 		geometry 	= point["geometry"]
 
-		print(properties)
-
 		val 		= properties['Type_EN']
 		val 		= val.split(" ")[-1]
 		val 		= val.split("_")
