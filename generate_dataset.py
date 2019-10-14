@@ -144,8 +144,8 @@ def raster_to_gt_points(gt_path, train_mask_path=None):
 		if train_mask_path is not None:
 			isTrain.append(train_mask[y, x] > 0)
 		else:
-			# every points are training points
-			isTrain.append(True)
+			# every points are test points
+			isTrain.append(False)
 	
 	return gts, targets, isTrain
 
@@ -173,8 +173,8 @@ def shp_to_gt_points(shape_file, train_mask_path=None):
 		if train_mask_path is not None:
 			pass
 		else:
-			# every points are training points
-			isTrain.append(True)
+			# every points are test points
+			isTrain.append(False)
 
 	return gts, targets, isTrain
 
