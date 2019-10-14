@@ -164,7 +164,12 @@ def shp_to_gt_points(shape_file, train_mask_path=None):
 
 		print(properties)
 
-		val 		= properties['AGB_Mean']
+		val 		= properties['Type_EN']
+		val 		= val.split(" ")[-1]
+		val 		= val.split("_")
+		val.sort()
+		val 		= "".join(val)
+
 		loc 		= geometry['coordinates']
 
 		gts.append(loc)
